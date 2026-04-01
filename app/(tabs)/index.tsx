@@ -1,25 +1,26 @@
 import { useState } from "react";
 import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   StyleSheet,
-  View,
+  Switch,
   Text,
   TextInput,
-  Pressable,
-  Switch,
-  Keyboard,
   TouchableWithoutFeedback,
-  KeyboardAvoidingView,
-  Platform
+  View
 } from "react-native";
 
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
+
 import {
-  useFonts,
   DMSans_400Regular,
-  DMSans_700Bold
+  DMSans_700Bold,
+  useFonts
 } from "@expo-google-fonts/dm-sans";
 
 export default function Index() {
@@ -68,7 +69,6 @@ export default function Index() {
 
           <View style={[styles.card, { backgroundColor: theme.card }]}>
 
-            {/* EMAIL */}
             <View style={[styles.inputContainer, { backgroundColor: theme.input }]}>
               <Ionicons name="mail" size={22} color={theme.icon} />
               <TextInput
@@ -78,7 +78,6 @@ export default function Index() {
               />
             </View>
 
-            {/* PASSWORD */}
             <View style={[styles.inputContainer, { backgroundColor: theme.input }]}>
               <Ionicons name="lock-closed" size={22} color={theme.icon} />
               <TextInput
@@ -89,14 +88,12 @@ export default function Index() {
               />
             </View>
 
-            {/* LOGIN BUTTON */}
             <Pressable style={styles.button}>
               <Text style={styles.buttonText}>
                 Zaloguj się
               </Text>
             </Pressable>
 
-            {/* ADMIN BUTTON */}
             <Pressable
               style={styles.adminButton}
               onPress={() => router.push("/home")}

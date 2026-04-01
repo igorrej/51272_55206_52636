@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 export default function Home() {
 
+  // 🔥 LISTA
   const meals = [
     { id: 1, name: "Kurczak z ryżem", protein: 30, fat: 5, carbs: 40 },
     { id: 2, name: "Jajecznica", protein: 18, fat: 15, carbs: 2 },
@@ -66,7 +67,7 @@ export default function Home() {
     saveMeals(updated);
   };
 
-
+  // 🔥 WYSZUKIWANIE
   const handleSearch = (text: string) => {
     setSearch(text);
 
@@ -91,10 +92,12 @@ export default function Home() {
   return (
     <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
 
+      {/* TOP */}
       <View style={styles.topBar}>
         <Text style={styles.logo}>CalTrack</Text>
       </View>
 
+      {/* POSIŁKI */}
       <View style={styles.mealsWrapper}>
         <Text style={styles.sectionTitle}>Twoje posiłki</Text>
 
@@ -120,6 +123,7 @@ export default function Home() {
         />
       </View>
 
+      {/* DÓŁ */}
       <View style={styles.bottomContainer}>
 
         <View style={styles.card}>
@@ -164,6 +168,7 @@ export default function Home() {
 
       </View>
 
+      {/* MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent>
 
         <KeyboardAvoidingView
@@ -184,6 +189,7 @@ export default function Home() {
                 style={styles.search}
               />
 
+              {/* 🔥 NAJWAŻNIEJSZY FIX */}
               <View style={{ flex: 1 }}>
 
                 <FlatList
