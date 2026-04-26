@@ -10,209 +10,244 @@ import {
   View
 } from "react-native";
 
-import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
+import { useRouter } from "expo-router";
+
+
+const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
 export default function Home() {
+  const router = useRouter();
 
-  const meals = [
-    { id: 1, name: "Kurczak z ryżem", protein: 30, fat: 5, carbs: 40 },
-    { id: 2, name: "Jajecznica", protein: 18, fat: 15, carbs: 2 },
-    { id: 3, name: "Owsianka", protein: 6, fat: 3, carbs: 35 },
-    { id: 4, name: "Kanapka z serem", protein: 10, fat: 8, carbs: 25 },
-    { id: 5, name: "Makaron", protein: 8, fat: 2, carbs: 50 },
-    { id: 6, name: "Ryż", protein: 4, fat: 1, carbs: 45 },
-    { id: 7, name: "Tuńczyk", protein: 25, fat: 3, carbs: 0 },
-    { id: 8, name: "Sałatka", protein: 5, fat: 2, carbs: 10 },
-    { id: 9, name: "Pizza", protein: 12, fat: 15, carbs: 60 },
-    { id: 10, name: "Burger", protein: 20, fat: 25, carbs: 40 }
-  ];
+  const logout = async () => {
+    try {
+      await signOut(auth);
 
+     router.replace("/");
+
+   } catch (e) {
+     console.log("LOGOUT ERROR:", e);
+    }
+  };
+
+  const [activeDay, setActiveDay] = useState("Mon");
+
+  const [data, setData] = useState<any>({});
   const [modalVisible, setModalVisible] = useState(false);
-  const [addedMeals, setAddedMeals] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [filteredMeals, setFilteredMeals] = useState(meals);
 
-  const steps = 7200;
-  const stepGoal = 10000;
+  const [name, setName] = useState("");
+  const [protein, setProtein] = useState("");
+  const [fat, setFat] = useState("");
+  const [carbs, setCarbs] = useState("");
+  const [kcal, setKcal] = useState("");
+
   const calorieGoal = 2000;
+  const stepGoal = 10000;
 
   useEffect(() => {
-    loadMeals();
+    loadData();
   }, []);
 
-  const loadMeals = async () => {
-    const data = await AsyncStorage.getItem("meals");
-    if (data) setAddedMeals(JSON.parse(data));
+  const loadData = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      setData(snap.data());
+    } else {
+      const initial:any = {};
+      days.forEach(d => {
+        initial[d] = { meals: [], steps: 0 };
+      });
+      await setDoc(ref, initial);
+      setData(initial);
+    }
   };
 
-  const saveMeals = async (newMeals: any[]) => {
-    setAddedMeals(newMeals);
-    await AsyncStorage.setItem("meals", JSON.stringify(newMeals));
+  const saveData = async (newData:any) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const ref = doc(db, "users", user.uid);
+
+    await setDoc(ref, newData);
+    setData(newData);
   };
 
-  const addMeal = (meal: any) => {
-    const updated = [...addedMeals, meal];
-    saveMeals(updated);
+  const current = data[activeDay] || { meals: [], steps: 0 };
+
+  const addMeal = () => {
+    if (!name) return;
+
+    const p = Number(protein)||0;
+    const f = Number(fat)||0;
+    const c = Number(carbs)||0;
+    const calc = p*4 + c*4 + f*9;
+
+    const meal = {
+      name,
+      protein:p,
+      fat:f,
+      carbs:c,
+      kcal:Number(kcal)||calc
+    };
+
+    const updated = {
+      ...data,
+      [activeDay]: {
+        ...current,
+        meals:[...current.meals, meal]
+      }
+    };
+
+    saveData(updated);
+
+    setName(""); setProtein(""); setFat(""); setCarbs(""); setKcal("");
     setModalVisible(false);
-    setSearch("");
-    setFilteredMeals(meals);
   };
 
-  const removeMeal = (index: number) => {
-    const updated = addedMeals.filter((_, i) => i !== index);
-    saveMeals(updated);
+  const removeMeal = (index:number) => {
+    const updatedMeals = current.meals.filter((_:any,i:number)=>i!==index);
+
+    const updated = {
+      ...data,
+      [activeDay]: {
+        ...current,
+        meals: updatedMeals
+      }
+    };
+
+    saveData(updated);
   };
 
+  const changeSteps = (val:number) => {
+    const updated = {
+      ...data,
+      [activeDay]: {
+        ...current,
+        steps: Math.max(0, current.steps + val)
+      }
+    };
 
-  const handleSearch = (text: string) => {
-    setSearch(text);
-
-    const filtered = meals.filter(m =>
-      m.name.toLowerCase().includes(text.toLowerCase())
-    );
-
-    setFilteredMeals(filtered);
+    saveData(updated);
   };
 
-  const protein = addedMeals.reduce((s, m) => s + (m.protein || 0), 0);
-  const fat = addedMeals.reduce((s, m) => s + (m.fat || 0), 0);
-  const carbs = addedMeals.reduce((s, m) => s + (m.carbs || 0), 0);
+  const resetSteps = () => {
+    const updated = {
+      ...data,
+      [activeDay]: {
+        ...current,
+        steps: 0
+      }
+    };
 
-  const calories = protein * 4 + carbs * 4 + fat * 9;
+    saveData(updated);
+  };
 
-  const caloriePercent = Math.min(Math.round((calories / calorieGoal) * 100), 100);
-  const stepPercent = Math.min(Math.round((steps / stepGoal) * 100), 100);
-
-  const macroTotal = protein + fat + carbs || 1;
+  const totalKcal = current.meals.reduce((s:any,m:any)=>s+m.kcal,0);
+  const percentKcal = Math.min((totalKcal/calorieGoal)*100,100);
+  const percentSteps = Math.min((current.steps/stepGoal)*100,100);
 
   return (
-    <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
+    <LinearGradient colors={["#667eea","#764ba2"]} style={styles.container}>
 
-      <View style={styles.topBar}>
-        <Text style={styles.logo}>CalTrack</Text>
-      </View>
+      <Pressable onPress={logout} style={styles.logoutBtn}>
+        <Text style={styles.logoutText}>Wyloguj</Text>
+      </Pressable>
 
-      <View style={styles.mealsWrapper}>
-        <Text style={styles.sectionTitle}>Twoje posiłki</Text>
-
-        <FlatList
-          data={addedMeals}
-          keyExtractor={(_, i) => i.toString()}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          ListEmptyComponent={<Text style={styles.empty}>Brak posiłków</Text>}
-          renderItem={({ item, index }) => (
-            <View style={styles.mealCard}>
-              <View>
-                <Text style={styles.mealName}>{item.name}</Text>
-                <Text style={styles.mealMacro}>
-                  B:{item.protein} T:{item.fat} W:{item.carbs}
-                </Text>
-              </View>
-
-              <Pressable onPress={() => removeMeal(index)}>
-                <Ionicons name="close-circle" size={22} color="#ff6b6b" />
-              </Pressable>
+      {/* DNI */}
+      <View style={styles.days}>
+        {days.map(d=>(
+          <Pressable key={d} onPress={()=>setActiveDay(d)}>
+            <View style={[
+              styles.day,
+              activeDay===d && styles.activeDay
+            ]}>
+              <Text style={{color:"white"}}>{d}</Text>
             </View>
-          )}
-        />
-      </View>
-
-      <View style={styles.bottomContainer}>
-
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Ionicons name="flame" size={18} color="#ff6b6b" />
-            <Text style={styles.label}>Kalorie</Text>
-          </View>
-
-          <Text style={styles.value}>
-            {calories} / {calorieGoal} kcal
-          </Text>
-
-          <View style={styles.progressBar}>
-            <View style={{ width: `${(protein / macroTotal) * 100}%`, backgroundColor: "#4ade80" }}/>
-            <View style={{ width: `${(fat / macroTotal) * 100}%`, backgroundColor: "#facc15" }}/>
-            <View style={{ width: `${(carbs / macroTotal) * 100}%`, backgroundColor: "#60a5fa" }}/>
-          </View>
-
-          <Text style={styles.percent}>{caloriePercent}% celu</Text>
-
-          <Pressable style={styles.button} onPress={() => setModalVisible(true)}>
-            <Text style={styles.buttonText}>Dodaj posiłek</Text>
           </Pressable>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Ionicons name="walk" size={18} color="#4ade80" />
-            <Text style={styles.label}>Kroki</Text>
-          </View>
-
-          <Text style={styles.value}>
-            {steps} / {stepGoal}
-          </Text>
-
-          <View style={styles.progressBar}>
-            <View style={{ width: `${stepPercent}%`, backgroundColor: "#4ade80" }}/>
-          </View>
-
-          <Text style={styles.percent}>{stepPercent}% celu</Text>
-        </View>
-
+        ))}
       </View>
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      {/* KALORIE */}
+      <View style={styles.card}>
+        <Text style={styles.text}>{totalKcal} / {calorieGoal} kcal</Text>
+        <View style={styles.bar}>
+          <View style={[styles.fill,{width:`${percentKcal}%`}]} />
+        </View>
+      </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
+      {/* KROKI */}
+      <View style={styles.card}>
+        <Text style={styles.text}>{Math.round(current.steps)} / {stepGoal}</Text>
 
-          <View style={styles.modalBackground}>
-            <View style={styles.modalContent}>
+        <View style={styles.bar}>
+          <View style={[styles.fill,{width:`${percentSteps}%`, backgroundColor:"#4ade80"}]} />
+        </View>
 
-              <Text style={styles.modalTitle}>Dodaj posiłek</Text>
+        <View style={styles.row}>
+          <Pressable style={styles.stepBtn} onPress={()=>changeSteps(1)}><Text>+1</Text></Pressable>
+          <Pressable style={styles.stepBtn} onPress={()=>changeSteps(10)}><Text>+10</Text></Pressable>
+          <Pressable style={styles.stepBtn} onPress={()=>changeSteps(100)}><Text>+100</Text></Pressable>
+          <Pressable style={styles.stepBtn} onPress={()=>changeSteps(-10)}><Text>-10</Text></Pressable>
+        </View>
 
-              <TextInput
-                placeholder="Szukaj..."
-                placeholderTextColor="#aaa"
-                value={search}
-                onChangeText={handleSearch}
-                style={styles.search}
-              />
+        <Pressable onPress={resetSteps}>
+          <Text style={{color:"red", marginTop:5}}>Reset</Text>
+        </Pressable>
+      </View>
 
-              <View style={{ flex: 1 }}>
-
-                <FlatList
-                  data={filteredMeals}
-                  keyExtractor={(item) => item.id.toString()}
-                  keyboardShouldPersistTaps="handled"
-                  renderItem={({ item }) => (
-                    <Pressable onPress={() => addMeal(item)}>
-                      <View style={styles.modalItem}>
-                        <Text style={styles.modalText}>{item.name}</Text>
-                        <Text style={{ color: "#aaa", fontSize: 12 }}>
-                          B:{item.protein} T:{item.fat} W:{item.carbs}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  )}
-                />
-
-              </View>
-
-              <Pressable onPress={() => setModalVisible(false)}>
-                <Text style={styles.close}>Zamknij</Text>
-              </Pressable>
-
+      {/* LISTA */}
+      <FlatList
+        data={current.meals}
+        keyExtractor={(_,i)=>i.toString()}
+        contentContainerStyle={{paddingBottom:120}}
+        renderItem={({item,index})=>(
+          <View style={styles.meal}>
+            <View>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.text}>{item.kcal} kcal</Text>
             </View>
+
+            <Pressable onPress={()=>removeMeal(index)}>
+              <Text style={{color:"red"}}>X</Text>
+            </Pressable>
           </View>
+        )}
+      />
 
+      {/* FAB */}
+      <Pressable style={styles.fab} onPress={()=>setModalVisible(true)}>
+        <Text style={{color:"white", fontSize:20}}>+</Text>
+      </Pressable>
+
+      {/* MODAL */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView style={{flex:1}} behavior="padding">
+          <View style={styles.modal}>
+            <TextInput placeholder="Nazwa" value={name} onChangeText={setName} style={styles.input}/>
+            <TextInput placeholder="Kcal" value={kcal} onChangeText={setKcal} style={styles.input}/>
+            <TextInput placeholder="Białko" value={protein} onChangeText={setProtein} style={styles.input}/>
+            <TextInput placeholder="Tłuszcz" value={fat} onChangeText={setFat} style={styles.input}/>
+            <TextInput placeholder="Węglowodany" value={carbs} onChangeText={setCarbs} style={styles.input}/>
+
+            <Pressable style={styles.button} onPress={addMeal}>
+              <Text style={{color:"white"}}>Dodaj</Text>
+            </Pressable>
+
+            <Pressable onPress={()=>setModalVisible(false)}>
+              <Text style={{color:"white", marginTop:10}}>Zamknij</Text>
+            </Pressable>
+          </View>
         </KeyboardAvoidingView>
-
       </Modal>
 
     </LinearGradient>
@@ -220,105 +255,106 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  container:{ flex:1, justifyContent:"space-between" },
+  container:{flex:1,padding:20},
 
-  topBar:{
-    backgroundColor:"rgba(255,255,255,0.08)",
-    paddingTop:60,
-    paddingBottom:14,
-    paddingLeft:20
+  days:{flexDirection:"row",justifyContent:"space-between",marginBottom:10},
+  
+  day:{
+    padding:8,
+    borderRadius:10,
+    backgroundColor:"rgba(255,255,255,0.2)"
   },
 
-  logo:{ fontSize:28, fontWeight:"bold", color:"white" },
-
-  mealsWrapper:{ flex:1, paddingHorizontal:20, marginTop:10 },
-
-  sectionTitle:{ color:"white", fontSize:18, marginBottom:10 },
-
-  empty:{ color:"rgba(255,255,255,0.6)" },
-
-  mealCard:{
-    flexDirection:"row",
-    justifyContent:"space-between",
-    alignItems:"center",
-    backgroundColor:"rgba(255,255,255,0.08)",
-    padding:14,
-    borderRadius:18,
-    marginBottom:10
+  activeDay:{
+    backgroundColor:"#22c55e"
   },
-
-  mealName:{ color:"white", fontWeight:"bold" },
-  mealMacro:{ color:"rgba(255,255,255,0.7)", fontSize:12 },
-
-  bottomContainer:{ padding:20, gap:12 },
 
   card:{
-    backgroundColor:"rgba(255,255,255,0.08)",
-    borderRadius:20,
-    padding:16
-  },
-
-  header:{ flexDirection:"row", gap:6 },
-  label:{ color:"white" },
-
-  value:{ color:"white", fontSize:18 },
-
-  progressBar:{
-    height:10,
-    backgroundColor:"rgba(255,255,255,0.25)",
-    borderRadius:10,
-    flexDirection:"row",
-    overflow:"hidden",
-    marginVertical:8
-  },
-
-  percent:{ color:"white", fontSize:12 },
-
-  button:{
-    marginTop:10,
-    backgroundColor:"#22c55e",
-    padding:12,
-    borderRadius:14,
-    alignItems:"center"
-  },
-
-  buttonText:{ color:"white", fontWeight:"bold" },
-
-  modalBackground:{
-    flex:1,
-    backgroundColor:"rgba(0,0,0,0.7)",
-    justifyContent:"flex-end"
-  },
-
-  modalContent:{
-    height:"85%",
-    backgroundColor:"#1e1e2e",
-    borderTopLeftRadius:24,
-    borderTopRightRadius:24,
-    padding:20
-  },
-
-  modalTitle:{ color:"white", fontSize:18, marginBottom:10 },
-
-  search:{
-    backgroundColor:"#2a2a3d",
-    color:"white",
-    padding:12,
+    backgroundColor:"rgba(255,255,255,0.2)",
+    padding:15,
     borderRadius:12,
     marginBottom:10
   },
 
-  modalItem:{
-    padding:14,
-    borderBottomWidth:1,
-    borderColor:"rgba(255,255,255,0.08)"
+  text:{color:"white"},
+
+  bar:{
+    height:8,
+    backgroundColor:"#ffffff44",
+    borderRadius:10,
+    marginTop:5
   },
 
-  modalText:{ color:"white" },
+  fill:{
+    height:8,
+    backgroundColor:"#22c55e",
+    borderRadius:10
+  },
 
-  close:{
-    color:"#22c55e",
-    textAlign:"center",
-    marginTop:12
-  }
+  row:{
+    flexDirection:"row",
+    justifyContent:"space-between",
+    marginTop:10
+  },
+
+  stepBtn:{
+    backgroundColor:"white",
+    padding:8,
+    borderRadius:8
+  },
+
+  meal:{
+    flexDirection:"row",
+    justifyContent:"space-between",
+    backgroundColor:"rgba(255,255,255,0.2)",
+    padding:12,
+    borderRadius:10,
+    marginBottom:10
+  },
+
+  name:{color:"white",fontWeight:"bold"},
+
+  fab:{
+    position:"absolute",
+    bottom:30,
+    right:20,
+    backgroundColor:"#22c55e",
+    padding:18,
+    borderRadius:50
+  },
+
+  modal:{
+    flex:1,
+    justifyContent:"center",
+    backgroundColor:"#000000aa",
+    padding:20
+  },
+
+  input:{
+    backgroundColor:"white",
+    padding:12,
+    borderRadius:10,
+    marginBottom:10
+  },
+
+  button:{
+    backgroundColor:"#22c55e",
+    padding:12,
+    borderRadius:10,
+    alignItems:"center"
+  },
+
+  logoutBtn:{
+  backgroundColor:"#ef4444",
+  paddingVertical:8,
+  paddingHorizontal:14,
+  borderRadius:12,
+  alignSelf:"flex-end",
+  marginBottom:10
+},
+
+logoutText:{
+  color:"white",
+  fontWeight:"bold"
+}
 });
