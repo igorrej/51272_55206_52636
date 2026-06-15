@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import Slider from "@react-native-community/slider";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -51,11 +52,12 @@ const getLastNDays = (n: number) => {
 };
 
 const themes: any = {
-  green: { primary: "#22c55e", gradient: ["#020617", "#0f172a"] },
-  red: { primary: "#ef4444", gradient: ["#1f0a0a", "#450a0a"] },
-  blue: { primary: "#3b82f6", gradient: ["#020617", "#0c1a3a"] },
-  purple: { primary: "#a855f7", gradient: ["#140a1f", "#2a0a45"] },
-  orange: { primary: "#f97316", gradient: ["#1f120a", "#45210a"] }
+  green:  { primary: "#22c55e", gradient: ["#050a05","#080808"] },
+  red:    { primary: "#ef4444", gradient: ["#0a0505","#080808"] },
+  blue:   { primary: "#3b82f6", gradient: ["#05070a","#080808"] },
+  purple: { primary: "#a855f7", gradient: ["#07050a","#080808"] },
+  orange: { primary: "#f97316", gradient: ["#0a0700","#080808"] },
+  zloty: { primary: "#C9A227", gradient: ["#0D0900", "#1C1200", "#0D0900"] },
 };
 
 export default function Home() {
@@ -86,7 +88,7 @@ return unsub;
 
   const [modalVisible, setModalVisible] = useState(false);
   const [chartVisible, setChartVisible] = useState(false);
-  const [mealType, setMealType] = useState<"sniadanie" | "obiad" | "kolacja">("sniadanie");
+  const [mealType, setMealType] = useState<"sniadanie" | "lunch" | "obiad" | "kolacja">("sniadanie");
 
   const [name, setName] = useState("");
   const [protein, setProtein] = useState("");
@@ -95,6 +97,7 @@ return unsub;
   const [results,setResults]=useState<any[]>([]);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [premiumVisible, setPremiumVisible] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [fontsLoaded] = useFonts({
@@ -157,16 +160,25 @@ const saveData = async (newData:any) => {
 
   const rawMeals = data[activeDay]?.meals || [];
   const meals = Array.isArray(rawMeals)
-    ? { sniadanie: rawMeals, obiad: [], kolacja: [] }
-    : rawMeals;
+  ? { sniadanie: rawMeals, lunch: [], obiad: [], kolacja: [] }
+  : rawMeals;
 
-  const current = {
-    meals: {
-      sniadanie: meals.sniadanie || [],
-      obiad: meals.obiad || [],
-      kolacja: meals.kolacja || []
-    }
-  };
+const current = {
+  meals: {
+    sniadanie: meals.sniadanie || [],
+    lunch: meals.lunch || [],
+    obiad: meals.obiad || [],
+    kolacja: meals.kolacja || []
+  }
+};
+
+const todaySteps = data[activeDay]?.steps || 0;
+const stepGoal = settings?.stepGoal || 10000;
+
+const saveSteps = (val: number) => {
+  const updated = { ...data, [activeDay]: { ...data[activeDay], steps: Math.round(val) } };
+  saveData(updated);
+};
 
   const closeModal = () => {
     setModalVisible(false);
@@ -176,6 +188,20 @@ const saveData = async (newData:any) => {
     setCarbs("");
     setResults([]);
   };
+
+  const buyPremium = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ref = doc(db, "users", user.uid);
+      const snap = await getDoc(ref);
+      const existing = snap.exists() ? snap.data() : {};
+      await setDoc(ref, {
+        ...existing,
+        settings: { ...existing.settings, premium: true }
+      });
+      setSettings((prev: any) => ({ ...prev, premium: true }));
+      setPremiumVisible(false);
+    };
 
   const addMeal = () => {
     if (!name) return;
@@ -203,7 +229,7 @@ const saveData = async (newData:any) => {
     closeModal();
   };
 
-  const removeMeal = (type: "sniadanie" | "obiad" | "kolacja", index: number) => {
+  const removeMeal = (type: "sniadanie" | "lunch" | "obiad" | "kolacja", index: number) => {
     const updated = {
       ...data,
       [activeDay]: {
@@ -295,10 +321,11 @@ const openScanner = async () => {
 };
 
   const allMeals = [
-    ...current.meals.sniadanie,
-    ...current.meals.obiad,
-    ...current.meals.kolacja
-  ];
+  ...current.meals.sniadanie,
+  ...current.meals.lunch,
+  ...current.meals.obiad,
+  ...current.meals.kolacja
+];
 
   const totalProtein = allMeals.reduce((s:any,m:any)=>s+m.protein,0);
   const totalFat = allMeals.reduce((s:any,m:any)=>s+m.fat,0);
@@ -307,13 +334,8 @@ const openScanner = async () => {
 
   const calorieGoal = settings?.calorieGoal || 2000;
 
-  const totalMacroKcal = totalProtein*4 + totalCarbs*4 + totalFat*9;
-
-  const proteinPct = totalMacroKcal ? (totalProtein*4 / totalMacroKcal)*100 : 0;
-  const carbsPct = totalMacroKcal ? (totalCarbs*4 / totalMacroKcal)*100 : 0;
-  const fatPct = totalMacroKcal ? (totalFat*9 / totalMacroKcal)*100 : 0;
-
   const last7 = getLastNDays(7);
+  const DAY_LETTERS = ["N","P","W","Ś","C","P","S"];
 
   const weekCalories = last7.map(d => {
     const day = data[d];
@@ -347,124 +369,144 @@ const openScanner = async () => {
   const calendarDays = getLastNDays(30);
 
   return (
-    <LinearGradient colors={theme.gradient} style={styles.container}>
-      <SafeAreaView style={{flex:1}}>
+    <LinearGradient colors={[theme.primary, theme.primary, theme.gradient[0], theme.gradient[1]]} locations={[0, 0.12, 0.13, 1]} style={styles.container}>
+      <SafeAreaView style={{flex:1, backgroundColor:"transparent"}}>
 
         {/* HEADER */}
-        <View style={styles.topBar}>
-          <Text style={[styles.logo,{color:theme.primary}]}>
-            CalTrack
-          </Text>
-
-          <View style={{flexDirection:"row",gap:15}}>
-            <Pressable onPress={()=>setChartVisible(true)}>
-              <Ionicons name="stats-chart-outline" size={22} color={theme.primary}/>
-            </Pressable>
-
-            <Pressable onPress={()=>router.push("/settings")}>
-              <Ionicons name="settings-outline" size={22} color={theme.primary}/>
-            </Pressable>
-
-            <Pressable
-              onPress={async()=>{
-
-                try{
-
-                await signOut(auth);
-
-                router.replace("/");
-
-                }catch(e){
-
-                console.log(
-                "LOGOUT ERROR:",
-                 e
-                );
-
-              }
-
-              }}
-            >
-            <Ionicons
-              name="log-out-outline"
-             size={22}
-              color="#ef4444"
-              />
-          </Pressable>
-          </View>
+       <View style={[styles.topBar,{backgroundColor:theme.primary}]}>
+          <Text style={styles.logo}>CalTrack</Text>
         </View>
 
-        <ScrollView contentContainerStyle={{paddingBottom:160}}>
+        <ScrollView contentContainerStyle={{paddingBottom:210}}>
 
           {/* KALENDARZ */}
           <ScrollView horizontal style={styles.calendar}>
-            {calendarDays.map(d=>(
-              <Pressable key={d} onPress={()=>setActiveDay(d)}>
-                <View style={[
-                  styles.day,
-                  activeDay===d && {backgroundColor:theme.primary}
-                ]}>
-                  <Text style={styles.dayText}>{d.slice(5)}</Text>
-                </View>
-              </Pressable>
-            ))}
+            {calendarDays.map(d=>{
+                const date = new Date(d + "T12:00:00");
+                const letter = DAY_LETTERS[date.getDay()];
+                const active = activeDay === d;
+                return (
+                  <Pressable key={d} onPress={()=>setActiveDay(d)}>
+                    <View style={[styles.day, active && {backgroundColor:theme.primary}]}>
+                      <Text style={[styles.dayLetter, active && {color:"#000"}]}>{letter}</Text>
+                      <Text style={[styles.dayText, active && {color:"#000"}]}>{d.slice(5)}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
           </ScrollView>
 
-          {/* SEKCJE */}
-          {(["sniadanie","obiad","kolacja"] as const).map(type=>(
-            <View key={type} style={styles.card}>
-              <View style={styles.row}>
-                <Text style={styles.sectionTitle}>
-                  {type==="sniadanie"?"Śniadanie":type==="obiad"?"Obiad":"Kolacja"}
-                </Text>
-
-                <Pressable onPress={()=>{
-                  setMealType(type);
-                  setModalVisible(true);
-                }}>
-                  <Ionicons name="add-circle" size={22} color={theme.primary}/>
-                </Pressable>
-              </View>
-
-              {current.meals[type].map((item:any,index:number)=>(
-                <Animated.View key={index} entering={FadeInDown.delay(index*40)} style={styles.meal}>
-                  <View>
-                    <Text style={styles.name}>{item.name}</Text>
-                    <Text style={styles.kcal}>{item.kcal} kcal</Text>
+            {/* KROKI */}
+                <View style={styles.stepsCard}>
+                  <View style={{flexDirection:"row",justifyContent:"space-between",marginBottom:6}}>
+                    <Text style={styles.stepsLabel}>KROKI</Text>
+                    <Text style={[styles.stepsValue,{color:theme.primary}]}>
+                      {todaySteps} / {stepGoal}
+                    </Text>
                   </View>
+                  <Slider
+                    style={{width:"100%",height:36}}
+                    minimumValue={0}
+                    maximumValue={stepGoal * 3}
+                    value={todaySteps}
+                    step={100}
+                    minimumTrackTintColor={theme.primary}
+                    maximumTrackTintColor="#1a1a1a"
+                    thumbTintColor={theme.primary}
+                    onSlidingComplete={saveSteps}
+                  />
+                </View>
 
-                  <Pressable onPress={()=>removeMeal(type,index)}>
-                    <Ionicons name="close" size={16} color="#ef4444"/>
-                  </Pressable>
-                </Animated.View>
-              ))}
-            </View>
-          ))}
+          {/* SEKCJE */}
+          {(["sniadanie","lunch","obiad","kolacja"] as const).map(type=>{
+              const label = type==="sniadanie"?"ŚNIADANIE":type==="lunch"?"LUNCH":type==="obiad"?"OBIAD":"KOLACJA";
+              const sectionMeals = current.meals[type];
+              const sp = Math.round(sectionMeals.reduce((s:any,m:any)=>s+m.protein,0));
+              const sf = Math.round(sectionMeals.reduce((s:any,m:any)=>s+m.fat,0));
+              const sc = Math.round(sectionMeals.reduce((s:any,m:any)=>s+m.carbs,0));
+              return (
+                <View key={type} style={styles.card}>
+                  <View style={styles.row}>
+                    <Text style={styles.sectionTitle}>{label}</Text>
+                    <Pressable onPress={()=>{ setMealType(type); setModalVisible(true); }}>
+                      <Text style={[styles.addPlus,{color:theme.primary}]}>+</Text>
+                    </Pressable>
+                  </View>
+                  {sectionMeals.map((item:any,index:number)=>(
+                    <Animated.View key={index} entering={FadeInDown.delay(index*40)} style={styles.meal}>
+                      <View style={{flex:1}}>
+                        <Text style={styles.name}>{item.name}</Text>
+                        <Text style={styles.kcal}>{Math.round(item.kcal)} kcal</Text>
+                      </View>
+                      <Pressable onPress={()=>removeMeal(type,index)}>
+                        <Ionicons name="close" size={16} color="#ef4444"/>
+                      </Pressable>
+                    </Animated.View>
+                  ))}
+                  <View style={styles.macroRow}>
+                    <Text style={styles.macroB}>{sp}<Text style={styles.macroSuffix}>B</Text></Text>
+                    <Text style={styles.macroDivider}> | </Text>
+                    <Text style={styles.macroT}>{sf}<Text style={styles.macroSuffix}>T</Text></Text>
+                    <Text style={styles.macroDivider}> | </Text>
+                    <Text style={styles.macroW}>{sc}<Text style={styles.macroSuffix}>W</Text></Text>
+                  </View>
+                </View>
+              );
+            })}
 
         </ScrollView>
 
         {/* DOLNY PANEL */}
         <View style={styles.bottomWrap}>
-          <View style={styles.bottomCard}>
-
-            <Text style={styles.big}>
-              {totalKcal} / {calorieGoal} kcal
-            </Text>
-
-            <View style={styles.progressBar}>
-              <View style={[styles.segment,{width:`${carbsPct}%`,backgroundColor:"#3b82f6"}]}/>
-              <View style={[styles.segment,{width:`${fatPct}%`,backgroundColor:"#ef4444"}]}/>
-              <View style={[styles.segment,{width:`${proteinPct}%`,backgroundColor:"#22c55e"}]}/>
+            <View style={[styles.bottomBar,{borderColor:theme.primary}]}>
+              <Text style={[styles.kcalBig,{color:theme.primary}]}>
+                {Math.round(totalKcal)}/{calorieGoal} KCAL
+              </Text>
+              <Text style={styles.macroDivider}> | </Text>
+              <Text style={styles.macroB}>{Math.round(totalProtein)}<Text style={styles.macroSuffix}>B</Text></Text>
+              <Text style={styles.macroDivider}> | </Text>
+              <Text style={styles.macroT}>{Math.round(totalFat)}<Text style={styles.macroSuffix}>T</Text></Text>
+              <Text style={styles.macroDivider}> | </Text>
+              <Text style={styles.macroW}>{Math.round(totalCarbs)}<Text style={styles.macroSuffix}>W</Text></Text>
             </View>
-
-            <View style={styles.macros}>
-              <Text style={styles.macro}>Węglowodany {Math.round(carbsPct)}%</Text>
-              <Text style={styles.macro}>Tłuszcz {Math.round(fatPct)}%</Text>
-              <Text style={styles.macro}>Białko {Math.round(proteinPct)}%</Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill,{
+                width:`${Math.min(totalKcal/calorieGoal,1)*100}%` as any,
+                backgroundColor:theme.primary
+              }]}/>
             </View>
-
           </View>
-        </View>
+        
+        {/* PREMIUM */}
+          <Modal visible={premiumVisible} transparent animationType="fade">
+            <BlurView intensity={60} style={styles.modalWrap}>
+              <LinearGradient
+                colors={["#1a1200","#3d2b00","#1a1200"]}
+                style={styles.premiumBox}
+              >
+                <Text style={styles.premiumStar}>⭐</Text>
+                <Text style={styles.premiumTitle}>CalTrack</Text>
+                <Text style={styles.premiumSub}>PREMIUM</Text>
+                <Text style={styles.premiumDesc}>
+                  Odblokuj ekskluzywny złoty motyw i wspieraj rozwój aplikacji.
+                </Text>
+
+                <Pressable style={styles.premiumBtn} onPress={buyPremium}>
+                  <Text style={styles.premiumBtnText}>KUP PREMIUM</Text>
+                </Pressable>
+
+                {settings?.premium && (
+                  <Text style={{color:"#FFD700",textAlign:"center",marginTop:12,fontFamily:"Inter_600SemiBold"}}>
+                    ✓ Masz już Premium!
+                  </Text>
+                )}
+
+                <Pressable onPress={()=>setPremiumVisible(false)} style={{marginTop:16}}>
+                  <Text style={{color:"#555",textAlign:"center"}}>Zamknij</Text>
+                </Pressable>
+              </LinearGradient>
+            </BlurView>
+          </Modal>
 
         {/* WYKRES */}
         <Modal visible={chartVisible} transparent animationType="fade">
@@ -564,9 +606,17 @@ const openScanner = async () => {
               <TextInput placeholder="Tłuszcz" value={fat} keyboardType="numeric" onChangeText={setFat} style={styles.input} placeholderTextColor="#94a3b8"/>
               <TextInput placeholder="Węglowodany" value={carbs} keyboardType="numeric" onChangeText={setCarbs} style={styles.input} placeholderTextColor="#94a3b8"/>
 
-              <Pressable style={[styles.button,{backgroundColor:theme.primary}]} onPress={addMeal}>
-                <Text style={{color:"white"}}>Dodaj ręcznie</Text>
-              </Pressable>
+              {settings?.theme === "zloty" ? (
+                <LinearGradient colors={["#B8860B","#FFD700","#B8860B"]} start={{x:0,y:0}} end={{x:1,y:0}} style={{borderRadius:12}}>
+                  <Pressable style={[styles.button]} onPress={addMeal}>
+                    <Text style={{color:"#1a1200",fontFamily:"Inter_700Bold"}}>Dodaj ręcznie</Text>
+                  </Pressable>
+                </LinearGradient>
+              ) : (
+                <Pressable style={[styles.button,{backgroundColor:theme.primary}]} onPress={addMeal}>
+                  <Text style={{color:"white"}}>Dodaj ręcznie</Text>
+                </Pressable>
+              )}
             </View>
           </BlurView>
         </Modal>
@@ -594,7 +644,23 @@ const openScanner = async () => {
     </View>
   </View>
 )}
-
+        <View style={styles.tabBar}>
+          <Pressable style={styles.tabItem} onPress={()=>setChartVisible(true)}>
+  <Ionicons name="bar-chart-outline" size={22} color="#555"/>
+</Pressable>
+          <Pressable style={styles.tabItem} onPress={()=>router.push("/statystyki")}>
+            <Ionicons name="stats-chart-outline" size={22} color="#555"/>
+          </Pressable>
+         <Pressable style={[styles.tabItem,styles.tabCenter]} onPress={()=>setPremiumVisible(true)}>
+            <Ionicons name="star" size={24} color="#b8860b"/>
+          </Pressable>
+          <Pressable style={styles.tabItem} onPress={()=>router.push("/settings")}>
+            <Ionicons name="settings-outline" size={22} color="#555"/>
+          </Pressable>
+          <Pressable style={styles.tabItem} onPress={async()=>{try{await signOut(auth);router.replace("/");}catch{}}}>
+            <Ionicons name="log-out-outline" size={22} color="#ef4444"/>
+          </Pressable>
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -602,35 +668,55 @@ const openScanner = async () => {
 
 const styles = StyleSheet.create({
   container:{flex:1},
-  loader:{flex:1,justifyContent:"center",alignItems:"center",backgroundColor:"#020617"},
-  topBar:{flexDirection:"row",justifyContent:"space-between",padding:20},
-  logo:{fontSize:20,fontFamily:"Inter_700Bold"},
-  calendar:{paddingHorizontal:20,marginBottom:10},
-  day:{padding:10,borderRadius:20,backgroundColor:"#ffffff10",marginRight:8},
-  dayText:{color:"white"},
-  card:{marginHorizontal:20,marginBottom:15,padding:18,borderRadius:20,backgroundColor:"#ffffff10"},
-  row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:10},
-  sectionTitle:{color:"white",fontSize:17,fontFamily:"Inter_600SemiBold"},
-  meal:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:6},
-  name:{color:"white"},
-  kcal:{color:"#94a3b8"},
+  loader:{flex:1,justifyContent:"center",alignItems:"center",backgroundColor:"#050505"},
+  topBar:{flexDirection:"row",justifyContent:"center",alignItems:"center",paddingVertical:12,paddingHorizontal:20},
+  logo:{fontSize:22,fontFamily:"Inter_700Bold",color:"#050a05"},
 
-  bottomWrap:{position:"absolute",bottom:0,left:0,right:0,padding:16},
-  bottomCard:{backgroundColor:"#ffffff10",borderRadius:20,padding:16},
-  big:{color:"white",fontSize:22,textAlign:"center",fontFamily:"Inter_700Bold"},
+  calendar:{paddingHorizontal:20,marginBottom:10,marginTop:14},
+  day:{alignItems:"center",paddingVertical:8,paddingHorizontal:10,borderRadius:16,backgroundColor:"#ffffff08",marginRight:6,minWidth:44},
+  dayLetter:{color:"white",fontFamily:"Inter_700Bold",fontSize:13},
+  dayText:{color:"#555",fontSize:10,marginTop:2},
 
-  progressBar:{flexDirection:"row",height:8,backgroundColor:"#ffffff20",borderRadius:10,overflow:"hidden",marginTop:10},
-  segment:{height:8},
+  card:{marginHorizontal:14,marginBottom:10,backgroundColor:"#111318",borderRadius:18,overflow:"hidden"},
+  row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingHorizontal:18,paddingTop:16,paddingBottom:6},
+  sectionTitle:{color:"white",fontFamily:"Inter_700Bold",fontSize:22,letterSpacing:1},
+  addPlus:{fontSize:28,lineHeight:32},
+  meal:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingHorizontal:18,paddingVertical:5},
+  name:{color:"white",fontSize:13},
+  kcal:{color:"#555",fontSize:11},
 
-  macros:{marginTop:10},
-  macro:{color:"#94a3b8",marginBottom:2},
+  macroRow:{flexDirection:"row",alignItems:"center",paddingHorizontal:18,paddingVertical:10},
+  macroDivider:{color:"#333",fontSize:14},
+  macroSuffix:{fontSize:11},
+  macroB:{color:"#22c55e",fontSize:14,fontFamily:"Inter_700Bold"},
+  macroT:{color:"#f97316",fontSize:14,fontFamily:"Inter_700Bold"},
+  macroW:{color:"#3b82f6",fontSize:14,fontFamily:"Inter_700Bold"},
 
-  modalWrap:{flex:1,justifyContent:"center",alignItems:"center"},
-  modal:{width:"85%",backgroundColor:"#020617",padding:20,borderRadius:20},
-  chartModal:{backgroundColor:"#020617",padding:20,borderRadius:20},
+  bottomWrap:{position:"absolute",bottom:70,left:0,right:0,padding:16},
+  bottomBar:{flexDirection:"row",alignItems:"center",borderWidth:1,borderRadius:14,paddingHorizontal:14,paddingVertical:10,backgroundColor:"#080808",gap:2},
+  kcalBig:{fontFamily:"Inter_700Bold",fontSize:13},
+  progressTrack:{height:4,backgroundColor:"#1a1a1a",borderRadius:4,marginTop:6,overflow:"hidden"},
+  progressFill:{height:4,borderRadius:4},
+
+  modalWrap:{flex:1,justifyContent:"center",alignItems:"center",padding:16},
+  modal:{width:"100%",backgroundColor:"#0a0a0a",padding:20,borderRadius:20,borderWidth:1,borderColor:"#1a1a1a"},
+  chartModal:{backgroundColor:"#0a0a0a",padding:20,borderRadius:20},
   modalHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:16},
-  modalTitle:{color:"white",fontSize:17,fontFamily:"Inter_600SemiBold"},
+  modalTitle:{color:"white",fontSize:17,fontFamily:"Inter_700Bold"},
 
-  input:{backgroundColor:"#ffffff10",padding:12,borderRadius:12,marginBottom:10,color:"white"},
-  button:{padding:12,borderRadius:12,alignItems:"center"}
+  input:{backgroundColor:"#111318",padding:12,borderRadius:12,marginBottom:10,color:"white",borderWidth:1,borderColor:"#1a1a1a"},
+  button:{padding:12,borderRadius:12,alignItems:"center"},
+  tabBar:{position:"absolute",bottom:0,left:0,right:0,flexDirection:"row",backgroundColor:"#0a0a0a",borderTopWidth:1,borderTopColor:"#1a1a1a",paddingBottom:20,paddingTop:10},
+  tabItem:{flex:1,alignItems:"center",justifyContent:"center"},
+  tabCenter:{backgroundColor:"#1a1200",borderRadius:28,marginHorizontal:6,paddingVertical:6},
+  stepsCard:{marginHorizontal:20,marginBottom:10,padding:16,borderRadius:18,backgroundColor:"#ffffff10"},
+  stepsLabel:{color:"white",fontFamily:"Inter_700Bold",fontSize:14},
+  stepsValue:{fontSize:14,fontFamily:"Inter_700Bold"},
+  premiumBox:{width:"85%",padding:28,borderRadius:24,alignItems:"center",borderWidth:1,borderColor:"#FFD70044"},
+  premiumStar:{fontSize:48,marginBottom:8},
+  premiumTitle:{color:"#FFD700",fontFamily:"Inter_700Bold",fontSize:28,letterSpacing:3},
+  premiumSub:{color:"#b8860b",fontFamily:"Inter_700Bold",fontSize:13,letterSpacing:6,marginBottom:16},
+  premiumDesc:{color:"#888",textAlign:"center",fontSize:13,marginBottom:24,lineHeight:20},
+  premiumBtn:{backgroundColor:"#FFD700",paddingHorizontal:32,paddingVertical:14,borderRadius:14},
+  premiumBtnText:{color:"#1a1200",fontFamily:"Inter_700Bold",fontSize:15,letterSpacing:2},
 });

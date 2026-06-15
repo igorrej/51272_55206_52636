@@ -4,7 +4,7 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  ScrollView
+  ScrollView,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,16 +14,17 @@ import { auth, db } from "@/lib/firebase";
 
 import { LinearGradient } from "expo-linear-gradient";
 
-// 🎨 MOTYWY
+// MOTYWY
 const themes:any = {
   green: { primary:"#22c55e", gradient:["#020617","#0f172a"] },
   red: { primary:"#ef4444", gradient:["#1f0a0a","#450a0a"] },
   blue: { primary:"#3b82f6", gradient:["#020617","#0c1a3a"] },
   purple: { primary:"#a855f7", gradient:["#140a1f","#2a0a45"] },
-  orange: { primary:"#f97316", gradient:["#1f120a","#45210a"] }
+  orange: { primary:"#f97316", gradient:["#1f120a","#45210a"] },
+  zloty: { primary: "#C9A227", gradient: ["#0D0900", "#1C1200", "#0D0900"] },
 };
 
-// ⚡ AKTYWNOŚĆ
+// AKTYWNOŚĆ
 const activityLevels:any = {
   low: 1.2,
   light: 1.375,
@@ -31,7 +32,7 @@ const activityLevels:any = {
   high: 1.725
 };
 
-// 🧠 PROFESJONALNE LICZENIE
+// LICZENIE
 const calculateCalories = ({
   weight,
   height,
@@ -69,6 +70,10 @@ export default function Settings() {
 
   const [themeName, setThemeName] = useState("green");
 
+  const [stepGoal, setStepGoal] = useState("10000");
+
+  const [isPremium, setIsPremium] = useState(false);
+
   const theme = themes[themeName];
 
   useEffect(() => {
@@ -90,6 +95,8 @@ export default function Settings() {
       setGoal(s.goal || "masa");
       setActivity(s.activity || "medium");
       setThemeName(s.theme || "green");
+      setIsPremium(snap.data().settings?.premium || false);
+      setStepGoal(String(s.stepGoal || "10000"));
     }
   };
 
@@ -120,17 +127,23 @@ export default function Settings() {
         goal,
         activity,
         theme: themeName,
-        calorieGoal: calories
+        calorieGoal: calories,
+        stepGoal: Number(stepGoal),
+        premium: isPremium,
       }
     });
 
-    alert("Zapisano 🔥");
+    alert("Zapisano");
   };
 
   return (
     <LinearGradient colors={theme.gradient} style={{flex:1}}>
-      <SafeAreaView style={{flex:1,padding:20}}>
-        <ScrollView>
+      <SafeAreaView style={{flex:1}}>
+        <ScrollView
+          contentContainerStyle={{padding:20, paddingBottom:300}}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
 
           <Text style={[styles.title,{color:theme.primary}]}>
             Ustawienia
@@ -185,7 +198,7 @@ export default function Settings() {
           {/* MOTYW */}
           <Text style={styles.label}>Motyw</Text>
           <View style={styles.row}>
-            {Object.keys(themes).map(t=>(
+            {Object.keys(themes).filter(t => t !== "zloty" || isPremium).map(t=>(
               <Pressable
                 key={t}
                 style={[styles.themeBtn, themeName===t && {backgroundColor:themes[t].primary}]}
@@ -196,11 +209,21 @@ export default function Settings() {
             ))}
           </View>
 
+          <Text style={styles.label}>Cel kroków</Text>
+          <TextInput
+            value={stepGoal}
+            onChangeText={setStepGoal}
+            style={styles.input}
+            keyboardType="numeric"
+            placeholder="10000"
+            placeholderTextColor="#444"
+          />
+
           <Pressable style={[styles.save,{backgroundColor:theme.primary}]} onPress={save}>
             <Text style={{color:"white"}}>Zapisz</Text>
           </Pressable>
 
-        </ScrollView>
+         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -214,5 +237,6 @@ const styles = StyleSheet.create({
   btn:{padding:10,borderRadius:10,backgroundColor:"#ffffff10"},
   themeBtn:{padding:10,borderRadius:10,backgroundColor:"#ffffff10"},
   text:{color:"white"},
-  save:{padding:15,borderRadius:12,alignItems:"center"}
+  save:{padding:15,borderRadius:12,alignItems:"center"},
+  sectionLabel:{color:"#333",fontFamily:"Inter_700Bold",fontSize:11,letterSpacing:2,marginBottom:10,marginTop:20},
 });
