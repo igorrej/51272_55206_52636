@@ -20,14 +20,11 @@ export default function Layout() {
   if (loading) return null;
 
   return (
-    <Stack
-      key={user ? "user" : "guest"}
-      screenOptions={{ headerShown: false }}
-    >
+    <Stack screenOptions={{ headerShown: false }}>
       {user ? (
-        <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(tabs)" />
       ) : (
-        <Stack.Screen name="index" />
+     <Stack.Screen name="index" />
       )}
     </Stack>
   );

@@ -318,8 +318,8 @@ return(
 
 <LinearGradient
 colors={[
-"#020617",
-"#0f172a"
+"#050a05",
+"#080808"
 ]}
 style={styles.container}
 >
@@ -547,7 +547,7 @@ gap:18
 
 title:{
 fontSize:38,
-color:"white",
+color:"#22c55e",
 fontFamily:
 "Inter_700Bold",
 textAlign:"center"
@@ -605,16 +605,19 @@ padding:20
 },
 
 modal:{
-backgroundColor:"#0f172a",
-padding:20,
-borderRadius:20,
-width:"100%",
+  backgroundColor:"#111318",
+  padding:24,
+  borderRadius:20,
+  width:"100%",
+  borderWidth:1,
+  borderColor:"#1a1a1a",
 },
 
 modalTitle:{
-color:"white",
-fontSize:20,
-marginBottom:20
+  color:"white",
+  fontSize:20,
+  marginBottom:20,
+  fontFamily:"Inter_700Bold",
 },
 
 messageBox:{

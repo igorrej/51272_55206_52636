@@ -5,14 +5,17 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  ActivityIndicator
 } from "react-native";
-
+import { useFonts, Inter_400Regular, Inter_700Bold } from "@expo-google-fonts/inter";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+
 
 // MOTYWY
 const themes:any = {
@@ -59,7 +62,7 @@ const calculateCalories = ({
 };
 
 export default function Settings() {
-
+  const router = useRouter();
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
@@ -75,12 +78,15 @@ export default function Settings() {
   const [isPremium, setIsPremium] = useState(false);
 
   const theme = themes[themeName];
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_700Bold });
 
   useEffect(() => {
     load();
   }, []);
 
-  const load = async () => {
+  if (!fontsLoaded) return <ActivityIndicator color={theme.primary} style={{flex:1,backgroundColor:"#050a05"}}/>;
+
+  async function load() {
     const user = auth.currentUser;
     if (!user) return;
 
@@ -98,7 +104,7 @@ export default function Settings() {
       setIsPremium(snap.data().settings?.premium || false);
       setStepGoal(String(s.stepGoal || "10000"));
     }
-  };
+  }
 
   const save = async () => {
     const user = auth.currentUser;
@@ -137,13 +143,20 @@ export default function Settings() {
   };
 
   return (
-    <LinearGradient colors={theme.gradient} style={{flex:1}}>
-      <SafeAreaView style={{flex:1}}>
-        <ScrollView
-          contentContainerStyle={{padding:20, paddingBottom:300}}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        >
+  <LinearGradient colors={theme.gradient} style={{flex:1}}>
+    <SafeAreaView style={{flex:1}}>
+      <View style={styles.header}>
+        <Pressable onPress={()=>router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={theme.primary}/>
+        </Pressable>
+        <Text style={[styles.title,{color:theme.primary}]}>Ustawienia</Text>
+        <View style={{width:36}}/>
+      </View>
+      <ScrollView
+        contentContainerStyle={{padding:20, paddingBottom:300}}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
 
           <Text style={[styles.title,{color:theme.primary}]}>
             Ustawienia
@@ -230,13 +243,14 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  title:{fontSize:24,marginBottom:20},
-  label:{color:"#94a3b8",marginBottom:5},
-  input:{backgroundColor:"#ffffff10",padding:12,borderRadius:12,marginBottom:15,color:"white"},
-  row:{flexDirection:"row",gap:10,flexWrap:"wrap",marginBottom:20},
-  btn:{padding:10,borderRadius:10,backgroundColor:"#ffffff10"},
-  themeBtn:{padding:10,borderRadius:10,backgroundColor:"#ffffff10"},
-  text:{color:"white"},
-  save:{padding:15,borderRadius:12,alignItems:"center"},
-  sectionLabel:{color:"#333",fontFamily:"Inter_700Bold",fontSize:11,letterSpacing:2,marginBottom:10,marginTop:20},
+  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingHorizontal:20,paddingTop:16,paddingBottom:8},
+  backBtn:{width:36,height:36,borderRadius:18,backgroundColor:"#ffffff08",justifyContent:"center",alignItems:"center"},
+  title:{fontSize:20,fontFamily:"Inter_700Bold"},
+  label:{color:"#555",fontFamily:"Inter_700Bold",fontSize:11,letterSpacing:2,marginBottom:8,marginTop:18},
+  input:{backgroundColor:"#111318",padding:14,borderRadius:14,marginBottom:4,color:"white",borderWidth:1,borderColor:"#1a1a1a",fontFamily:"Inter_400Regular"},
+  row:{flexDirection:"row",gap:8,flexWrap:"wrap",marginBottom:4},
+  btn:{paddingHorizontal:16,paddingVertical:10,borderRadius:12,backgroundColor:"#111318",borderWidth:1,borderColor:"#1a1a1a"},
+  themeBtn:{paddingHorizontal:16,paddingVertical:10,borderRadius:12,backgroundColor:"#111318",borderWidth:1,borderColor:"#1a1a1a"},
+  text:{color:"#888",fontFamily:"Inter_700Bold",fontSize:12},
+  save:{padding:15,borderRadius:14,alignItems:"center",marginTop:24},
 });

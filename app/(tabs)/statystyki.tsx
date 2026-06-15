@@ -14,6 +14,7 @@ const themes: any = {
   blue:   { primary: "#3b82f6", gradient: ["#05070a","#080808"] },
   purple: { primary: "#a855f7", gradient: ["#07050a","#080808"] },
   orange: { primary: "#f97316", gradient: ["#0a0700","#080808"] },
+  zloty:  { primary: "#C9A227", gradient: ["#0D0900","#1C1200","#0D0900"] },
 };
 
 const MEAL_TYPES = ["sniadanie","lunch","obiad","kolacja"];
@@ -41,8 +42,12 @@ export default function Statystyki() {
     const snap = await getDoc(doc(db, "users", user.uid));
     if (snap.exists()) {
       const data = snap.data();
-      setDays(data.days || {});
       setSettings(data.settings || { theme: "green" });
+      const dayData: any = {};
+      Object.keys(data).forEach(k => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) dayData[k] = data[k];
+    });
+      setDays(dayData);
     }
   };
 

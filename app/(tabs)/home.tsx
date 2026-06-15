@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import Slider from "@react-native-community/slider";
-
+//import Slider from "@react-native-community/slider";
+import { Pedometer } from "expo-sensors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,10 +27,10 @@ import {
   Inter_700Bold
 } from "@expo-google-fonts/inter";
 
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { signOut, onAuthStateChanged  } from "firebase/auth";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 
 import { LineChart } from "react-native-chart-kit";
 import { searchFood, parseFoodItem, getFoodByBarcode } from "@/lib/fatsecret";
@@ -60,27 +60,8 @@ const themes: any = {
   zloty: { primary: "#C9A227", gradient: ["#0D0900", "#1C1200", "#0D0900"] },
 };
 
-export default function Home() {
+  export default function Home() {
   const router = useRouter();
-  useEffect(()=>{
-
-  const unsub=
-  onAuthStateChanged(
-  auth,
-  (user)=>{
-
-  if(!user){
-
-  router.replace("/");
-
-  }
-
-  }
-  );
-
-return unsub;
-
-},[router]);
 
   const [activeDay, setActiveDay] = useState(getDateKey(new Date()));
   const [data, setData] = useState<any>({});
@@ -106,19 +87,35 @@ return unsub;
     Inter_700Bold
   });
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
 
-  async function loadData() {
-    const user = auth.currentUser;
-    if (!user) return;
 
-    const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists()) {
+
+useEffect(() => {
+  let unsubSnap: (() => void) | null = null;
+
+  const unsubAuth = onAuthStateChanged(auth, (user) => {
+    if (unsubSnap) { unsubSnap(); unsubSnap = null; }
+    if (!user) { router.replace("/"); return; }
+
+    unsubSnap = onSnapshot(doc(db, "users", user.uid), (snap) => {
+      if (!snap.exists()) return;
       const d = snap.data();
-      setData(d.days || {});
       setSettings(d.settings || { theme: "green" });
-    }
-  }
+      const dayData: any = {};
+      Object.keys(d).forEach(k => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) dayData[k] = d[k];
+      });
+      setData(dayData);
+    });
+  });
+
+  return () => { unsubAuth(); if (unsubSnap) unsubSnap(); };
+}, [router]);
+
+
+
+  useEffect(() => {
+  fetchSteps(activeDay);}, [activeDay]);
 
 const saveData = async (newData:any) => {
 
@@ -132,18 +129,7 @@ const saveData = async (newData:any) => {
    "users",
    user.uid
  );
-
-  await setDoc(
-  ref,
-  {
-  ...data,
-  days:newData
-  },
-  {
-  merge:true
-  }
-  );
-
+ await setDoc(ref, newData, { merge: true });
  setData(newData);
 
 };
@@ -175,9 +161,34 @@ const current = {
 const todaySteps = data[activeDay]?.steps || 0;
 const stepGoal = settings?.stepGoal || 10000;
 
-const saveSteps = (val: number) => {
-  const updated = { ...data, [activeDay]: { ...data[activeDay], steps: Math.round(val) } };
-  saveData(updated);
+// Slider do kroków jest fajny, ale niestety Google Fit i Apple Health nie pozwalają na ręczne ustawianie kroków, więc musi chwilowo zniknąć. Może kiedyś wróci jako wskaźnik postępu do celu kroków, ale bez możliwości edycji.
+//const saveSteps = (val: number) => {
+  //const updated = { ...data, [activeDay]: { ...data[activeDay], steps: Math.round(val) } };
+  //saveData(updated);
+//};
+
+async function fetchSteps(day: string) {
+  const isAvailable = await Pedometer.isAvailableAsync();
+  if (!isAvailable) return;
+  const start = new Date(day + "T00:00:00");
+  const end = new Date(day + "T23:59:59");
+  try {
+    const result = await Pedometer.getStepCountAsync(start, end);
+if (result?.steps) {
+  const user = auth.currentUser;
+  if (!user) return;
+  setData((prev: any) => {
+    const current = prev[day]?.steps || 0;
+    const best = Math.max(result.steps, current);
+    if (best > current) {
+      setDoc(doc(db, "users", user.uid), { [day]: { steps: best } }, { merge: true });
+    }
+    return { ...prev, [day]: { ...prev[day], steps: best } };
+  });
+}
+  } catch (e) {
+    console.log("Pedometer error:", e);
+  }
 };
 
   const closeModal = () => {
@@ -349,6 +360,7 @@ const openScanner = async () => {
 
     return [
       ...(meals?.sniadanie || []),
+      ...(meals?.lunch || []),
       ...(meals?.obiad || []),
       ...(meals?.kolacja || [])
     ].reduce((s:any,m:any)=>s+m.kcal,0);
@@ -404,17 +416,17 @@ const openScanner = async () => {
                       {todaySteps} / {stepGoal}
                     </Text>
                   </View>
-                  <Slider
+                  {/* <Slider
                     style={{width:"100%",height:36}}
                     minimumValue={0}
-                    maximumValue={stepGoal * 3}
+                    maximumValue={stepGoal * 1.5}
                     value={todaySteps}
                     step={100}
                     minimumTrackTintColor={theme.primary}
                     maximumTrackTintColor="#1a1a1a"
                     thumbTintColor={theme.primary}
                     onSlidingComplete={saveSteps}
-                  />
+                  /> */}
                 </View>
 
           {/* SEKCJE */}
