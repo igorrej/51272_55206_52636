@@ -43,6 +43,11 @@ export async function getFoodByBarcode(barcode: string) {
   try {
     const response = await axios.get(
       `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
+      {
+        headers: {
+          "User-Agent": "CalTrack/1.0 (contact@caltrack.app)",
+        },
+      },
     );
 
     if (response.data?.status !== 1) return null;
@@ -52,9 +57,14 @@ export async function getFoodByBarcode(barcode: string) {
 
     if (!nutriments) return null;
 
+    // energy-kcal_100g może nie istnieć — fallback na konwersję z kJ
+    const kcal =
+      Number(nutriments["energy-kcal_100g"] || 0) ||
+      Math.round(Number(nutriments["energy_100g"] || 0) / 4.184);
+
     return {
       name: product.product_name || product.brands || "Nieznany produkt",
-      calories: Number(nutriments["energy-kcal_100g"] || 0),
+      calories: kcal,
       protein: Number(nutriments["proteins_100g"] || 0),
       fat: Number(nutriments["fat_100g"] || 0),
       carbs: Number(nutriments["carbohydrates_100g"] || 0),
