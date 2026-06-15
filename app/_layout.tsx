@@ -4,7 +4,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../lib/firebase";
 
 export default function Layout() {
-
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,15 +19,8 @@ export default function Layout() {
   if (loading) return null;
 
   return (
-    <Stack
-      key={user ? "user" : "guest"}
-      screenOptions={{ headerShown: false }}
-    >
-      {user ? (
-        <Stack.Screen name="(tabs)" />
-      ) : (
-        <Stack.Screen name="index" />
-      )}
+    <Stack screenOptions={{ headerShown: false }}>
+      {user ? <Stack.Screen name="(tabs)" /> : <Stack.Screen name="index" />}
     </Stack>
   );
 }
