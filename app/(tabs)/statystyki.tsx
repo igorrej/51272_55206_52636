@@ -1,4 +1,11 @@
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Dimensions,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState, useCallback, useEffect } from "react";
@@ -6,6 +13,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LineChart } from "react-native-chart-kit";
 import {
   useFonts,
   Inter_700Bold,
@@ -13,6 +21,8 @@ import {
   Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
 import { onAuthStateChanged } from "firebase/auth";
+
+const screenWidth = Dimensions.get("window").width;
 
 const themes: any = {
   green: { primary: "#22c55e", gradient: ["#050a05", "#080808"] },
@@ -22,7 +32,7 @@ const themes: any = {
 
 const MEAL_TYPES = ["sniadanie", "lunch", "obiad", "kolacja"];
 
-// Ekran statystyk — historia dni, łączne kalorie i kroki
+// Ekran statystyk — historia dni, łączne sumy kalorii, kroków i dni z osiągniętym celem wody
 export default function Statystyki() {
   const router = useRouter();
   useEffect(() => {
@@ -103,6 +113,14 @@ export default function Statystyki() {
     return Math.round(arr.reduce((s: number, m: any) => s + (m.kcal || 0), 0));
   };
 
+  // Dni z zapisaną wagą, posortowane chronologicznie
+  const weightDays = sortedDays.filter((d) => days[d]?.weight).reverse(); // od najstarszego do najnowszego
+
+  const weightData = weightDays.map((d) => days[d].weight);
+  const daysWithWaterGoal = sortedDays.filter(
+    (d) => (days[d]?.water || 0) >= 10,
+  ).length;
+
   return (
     <LinearGradient
       colors={theme?.gradient ?? ["#050a05", "#080808"]}
@@ -144,7 +162,53 @@ export default function Statystyki() {
                 {totalStepsAll.toLocaleString("pl-PL")}
               </Text>
             </View>
+            <View style={[styles.card, { flex: 1 }]}>
+              <Text style={styles.cardLabel}>CEL WODY</Text>
+              <Text style={[styles.cardValue, { color: theme.primary }]}>
+                {daysWithWaterGoal}
+              </Text>
+              <Text style={{ color: "#444", fontSize: 11, marginTop: 4 }}>
+                {daysWithWaterGoal === 1 ? "dzień" : "dni"} z{" "}
+                {sortedDays.length}
+              </Text>
+            </View>
           </View>
+
+          {/* WYKRES WAGI */}
+          {weightData.length >= 2 && (
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>WAGA (KG)</Text>
+              <LineChart
+                data={{
+                  labels: weightDays.map((d) => d.slice(5)),
+                  datasets: [{ data: weightData }],
+                }}
+                width={screenWidth - 52}
+                height={180}
+                chartConfig={{
+                  backgroundGradientFrom: "#111318",
+                  backgroundGradientTo: "#111318",
+                  color: () => theme.primary,
+                  labelColor: () => "#555",
+                  propsForDots: { r: "4", fill: theme.primary },
+                  decimalPlaces: 1,
+                }}
+                bezier
+                style={{ borderRadius: 12, marginTop: 8 }}
+              />
+            </View>
+          )}
+          {weightData.length === 1 && (
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>WAGA</Text>
+              <Text style={[styles.cardValue, { color: theme.primary }]}>
+                {weightData[0]} kg
+              </Text>
+              <Text style={{ color: "#444", fontSize: 11, marginTop: 4 }}>
+                Dodaj więcej pomiarów żeby zobaczyć wykres
+              </Text>
+            </View>
+          )}
 
           {/* HISTORIA DNI */}
           <Text style={styles.sectionLabel}>HISTORIA</Text>
@@ -159,13 +223,30 @@ export default function Statystyki() {
             return (
               <View key={d} style={styles.dayRow}>
                 <Text style={styles.dayDate}>{d}</Text>
-                <View style={{ flexDirection: "row", gap: 16 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 4,
+                  }}
+                >
                   <Text style={[styles.dayKcal, { color: theme.primary }]}>
                     {kcal} kcal
                   </Text>
                   <Text style={styles.daySteps}>
                     {steps.toLocaleString("pl-PL")} 👟
                   </Text>
+                  {days[d]?.weight ? (
+                    <Text style={{ color: "#666", fontSize: 13 }}>
+                      {days[d].weight} kg ⚖️
+                    </Text>
+                  ) : null}
+                  {days[d]?.water ? (
+                    <Text style={{ color: "#666", fontSize: 13 }}>
+                      {days[d].water * 200} ml 💧
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             );
@@ -220,9 +301,8 @@ const styles = StyleSheet.create({
   },
 
   dayRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "flex-start",
     backgroundColor: "#111318",
     borderRadius: 12,
     padding: 14,

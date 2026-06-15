@@ -27,7 +27,7 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "expo-router";
@@ -57,6 +57,31 @@ const themes: any = {
   zloty: { primary: "#C9A227", gradient: ["#0D0900", "#1C1200", "#0D0900"] },
 };
 
+// Funkcja do obliczania dziennego zapotrzebowania kalorycznego (TDEE) na podstawie wagi, wzrostu, wieku, płci, poziomu aktywności i celu (redukcja/masa/utrzymanie)
+const calculateCalories = (weight: number, settings: any) => {
+  const height = Number(settings.height) || 0;
+  const age = Number(settings.age) || 0;
+  if (!weight || !height || !age) return settings.calorieGoal || 2000;
+
+  const bmr =
+    settings.gender === "female"
+      ? 10 * weight + 6.25 * height - 5 * age - 161
+      : 10 * weight + 6.25 * height - 5 * age + 5;
+
+  const activityMap: any = {
+    low: 1.2,
+    light: 1.375,
+    medium: 1.55,
+    high: 1.725,
+  };
+  const tdee = bmr * (activityMap[settings.activity] || 1.55);
+
+  if (settings.goal === "masa") return Math.round(tdee + 300);
+  if (settings.goal === "redukcja") return Math.round(tdee - 400);
+  return Math.round(tdee);
+};
+
+// Ekran główny — dodawanie posiłków, kroki, woda, waga, podsumowanie dnia i wykres tygodniowy
 export default function Home() {
   const router = useRouter();
 
@@ -78,6 +103,8 @@ export default function Home() {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [premiumVisible, setPremiumVisible] = useState(false);
+  const [weightModalVisible, setWeightModalVisible] = useState(false);
+  const [weightInput, setWeightInput] = useState("");
   const calendarRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -167,6 +194,7 @@ export default function Home() {
   };
 
   const todaySteps = data[activeDay]?.steps || 0;
+  const todayWater = data[activeDay]?.water || 0;
   const stepGoal = settings?.stepGoal || 10000;
 
   // Slider do kroków jest fajny, ale niestety Google Fit i Apple Health nie pozwalają na ręczne ustawianie kroków, więc musi chwilowo zniknąć...
@@ -453,6 +481,83 @@ export default function Home() {
                   /> */}
           </View>
 
+          {/* WAGA */}
+          <View style={styles.stepsCard}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text style={styles.stepsLabel}>WAGA</Text>
+              <Pressable
+                onPress={() => {
+                  setWeightInput(
+                    String(data[activeDay]?.weight || settings?.weight || ""),
+                  );
+                  setWeightModalVisible(true);
+                }}
+              >
+                <Text style={[styles.stepsValue, { color: theme.primary }]}>
+                  {data[activeDay]?.weight
+                    ? `${data[activeDay].weight} kg`
+                    : settings?.weight
+                      ? `${settings.weight} kg`
+                      : "— kg"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* WODA */}
+          <View style={styles.stepsCard}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <Text style={styles.stepsLabel}>WODA</Text>
+              <Text style={[styles.stepsValue, { color: theme.primary }]}>
+                {todayWater * 200} / 2000 ml
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Pressable
+                  key={i}
+                  onPress={() => {
+                    const newVal = i < todayWater ? i : i + 1;
+                    const updated = {
+                      ...data,
+                      [activeDay]: { ...data[activeDay], water: newVal },
+                    };
+                    saveData(updated);
+                  }}
+                  style={{
+                    width: 30,
+                    height: 38,
+                    borderRadius: 8,
+                    backgroundColor: i < todayWater ? theme.primary : "#1a1a1a",
+                    borderWidth: 1,
+                    borderColor: i < todayWater ? theme.primary : "#333",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="water"
+                    size={16}
+                    color={i < todayWater ? "#000" : "#333"}
+                  />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
           {/* SEKCJE */}
           {(["sniadanie", "lunch", "obiad", "kolacja"] as const).map((type) => {
             const label =
@@ -473,6 +578,7 @@ export default function Home() {
             const sc = Math.round(
               sectionMeals.reduce((s: any, m: any) => s + m.carbs, 0),
             );
+
             return (
               <View key={type} style={styles.card}>
                 <View style={styles.row}>
@@ -851,6 +957,49 @@ export default function Home() {
             </Pressable>
           </View>
         )}
+        {/* MODAL WAGI */}
+        <Modal visible={weightModalVisible} transparent animationType="fade">
+          <BlurView intensity={40} style={styles.modalWrap}>
+            <View style={styles.modal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Waga dnia</Text>
+                <Pressable onPress={() => setWeightModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="white" />
+                </Pressable>
+              </View>
+              <TextInput
+                placeholder="np. 75.5"
+                placeholderTextColor="#94a3b8"
+                value={weightInput}
+                onChangeText={setWeightInput}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <Pressable
+                style={[styles.button, { backgroundColor: theme.primary }]}
+                onPress={async () => {
+                  const w = Number(weightInput.replace(",", "."));
+                  if (!w) return;
+                  const user = auth.currentUser;
+                  if (!user) return;
+                  const newCalories = calculateCalories(w, settings);
+                  await updateDoc(doc(db, "users", user.uid), {
+                    [`${activeDay}.weight`]: w,
+                    "settings.weight": String(w),
+                    "settings.calorieGoal": newCalories,
+                  });
+                  setData((prev: any) => ({
+                    ...prev,
+                    [activeDay]: { ...prev[activeDay], weight: w },
+                  }));
+                  setWeightModalVisible(false);
+                }}
+              >
+                <Text style={{ color: "white" }}>Zapisz wagę</Text>
+              </Pressable>
+            </View>
+          </BlurView>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );

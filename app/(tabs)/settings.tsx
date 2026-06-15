@@ -13,11 +13,11 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -87,9 +87,11 @@ export default function Settings() {
   const theme = themes[themeName];
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_700Bold });
 
-  useEffect(() => {
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, []),
+  );
 
   if (!fontsLoaded)
     return (
@@ -136,6 +138,11 @@ export default function Settings() {
     const snap = await getDoc(ref);
     const existing = snap.exists() ? snap.data() : {};
 
+    const oldCalories = existing?.settings?.calorieGoal || 0;
+
+    // Zapisuje ustawienia i wagę w Firestore
+    const today = new Date().toISOString().split("T")[0];
+
     await setDoc(ref, {
       ...existing,
       settings: {
@@ -150,9 +157,23 @@ export default function Settings() {
         stepGoal: Number(stepGoal),
         premium: isPremium,
       },
+      [today]: {
+        ...(existing[today] || {}),
+        weight: Number(weight),
+      },
     });
 
-    alert("Zapisano");
+    const diff = calories - oldCalories;
+    const diffText =
+      oldCalories === 0
+        ? ""
+        : diff > 0
+          ? ` (+${diff} kcal)`
+          : diff < 0
+            ? ` (${diff} kcal)`
+            : " (bez zmian)";
+
+    alert(`Zapisano!\nCel kalorii: ${calories} kcal${diffText}`);
   };
 
   return (
@@ -324,7 +345,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, fontFamily: "Inter_700Bold" },
   label: {
-    color: "#555",
+    color: "#94a3b8",
     fontFamily: "Inter_700Bold",
     fontSize: 11,
     letterSpacing: 2,
@@ -358,6 +379,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1a1a1a",
   },
-  text: { color: "#888", fontFamily: "Inter_700Bold", fontSize: 12 },
+  text: { color: "white", fontFamily: "Inter_700Bold", fontSize: 12 },
   save: { padding: 15, borderRadius: 14, alignItems: "center", marginTop: 24 },
 });
