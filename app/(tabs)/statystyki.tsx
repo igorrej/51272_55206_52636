@@ -1,10 +1,10 @@
 import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts, Inter_700Bold, Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 
@@ -27,14 +27,14 @@ export default function Statystyki() {
 
   const [fontsLoaded] = useFonts({ Inter_700Bold, Inter_400Regular, Inter_600SemiBold });
 
-  useEffect(() => {
-    load();
-    const user = auth.currentUser;
-    if (user?.metadata?.creationTime) {
-      const d = new Date(user.metadata.creationTime);
-      setCreatedAt(d.toLocaleDateString("pl-PL", { day:"2-digit", month:"long", year:"numeric" }));
-    }
-  }, []);
+  useFocusEffect(useCallback(() => {
+  load();
+  const user = auth.currentUser;
+  if (user?.metadata?.creationTime) {
+    const d = new Date(user.metadata.creationTime);
+    setCreatedAt(d.toLocaleDateString("pl-PL", { day:"2-digit", month:"long", year:"numeric" }));
+  }
+  }, []));
 
   const load = async () => {
     const user = auth.currentUser;

@@ -15,7 +15,7 @@ import { Pedometer } from "expo-sensors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,6 +79,7 @@ const themes: any = {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [premiumVisible, setPremiumVisible] = useState(false);
+  const calendarRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [fontsLoaded] = useFonts({
@@ -133,6 +134,12 @@ const saveData = async (newData:any) => {
  setData(newData);
 
 };
+
+useEffect(() => {
+  setTimeout(() => {
+    calendarRef.current?.scrollToEnd({ animated: false });
+  }, 100);
+}, []);
 
   if (!fontsLoaded) {
     return (
@@ -392,7 +399,7 @@ const openScanner = async () => {
         <ScrollView contentContainerStyle={{paddingBottom:210}}>
 
           {/* KALENDARZ */}
-          <ScrollView horizontal style={styles.calendar}>
+          <ScrollView ref={calendarRef} horizontal style={styles.calendar}>
             {calendarDays.map(d=>{
                 const date = new Date(d + "T12:00:00");
                 const letter = DAY_LETTERS[date.getDay()];
