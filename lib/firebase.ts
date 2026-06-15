@@ -1,3 +1,4 @@
+// Inicjalizacja Firebase — konfiguracja pobierana ze zmiennych środowiskowych Expo
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -13,5 +14,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
+// Auth — zarządzanie sesją użytkownika (in-memory, brak AsyncStorage)
 export const auth = getAuth(app);
+
+// Firestore — baza danych aplikacji
 export const db = getFirestore(app);

@@ -5,9 +5,13 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
-import { useFonts, Inter_400Regular, Inter_700Bold } from "@expo-google-fonts/inter";
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -15,36 +19,33 @@ import { auth, db } from "@/lib/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { onAuthStateChanged } from "firebase/auth";
 
-
-// MOTYWY
-const themes:any = {
-  green: { primary:"#22c55e", gradient:["#020617","#0f172a"] },
-  red: { primary:"#ef4444", gradient:["#1f0a0a","#450a0a"] },
-  blue: { primary:"#3b82f6", gradient:["#020617","#0c1a3a"] },
-  purple: { primary:"#a855f7", gradient:["#140a1f","#2a0a45"] },
-  orange: { primary:"#f97316", gradient:["#1f120a","#45210a"] },
+// Dostępne motywy — zloty widoczny tylko dla użytkowników premium
+const themes: any = {
+  green: { primary: "#22c55e", gradient: ["#020617", "#0f172a"] },
+  blue: { primary: "#3b82f6", gradient: ["#020617", "#0c1a3a"] },
   zloty: { primary: "#C9A227", gradient: ["#0D0900", "#1C1200", "#0D0900"] },
 };
 
 // AKTYWNOŚĆ
-const activityLevels:any = {
+const activityLevels: any = {
   low: 1.2,
   light: 1.375,
   medium: 1.55,
-  high: 1.725
+  high: 1.725,
 };
 
-// LICZENIE
+// Oblicza dzienne zapotrzebowanie kaloryczne metodą Mifflin-St Jeor
+// Wynik korygowany o cel: +300 kcal na masę, -400 kcal na redukcję
 const calculateCalories = ({
   weight,
   height,
   age,
   gender,
   activity,
-  goal
-}:any) => {
-
+  goal,
+}: any) => {
   if (!weight || !height || !age) return 2000;
 
   // BMR (Mifflin-St Jeor)
@@ -63,6 +64,12 @@ const calculateCalories = ({
 
 export default function Settings() {
   const router = useRouter();
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) router.replace("/");
+    });
+    return unsub;
+  }, [router]);
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
@@ -84,8 +91,14 @@ export default function Settings() {
     load();
   }, []);
 
-  if (!fontsLoaded) return <ActivityIndicator color={theme.primary} style={{flex:1,backgroundColor:"#050a05"}}/>;
-
+  if (!fontsLoaded)
+    return (
+      <ActivityIndicator
+        color={theme.primary}
+        style={{ flex: 1, backgroundColor: "#050a05" }}
+      />
+    );
+  // Wczytuje zapisane ustawienia użytkownika z Firestore
   async function load() {
     const user = auth.currentUser;
     if (!user) return;
@@ -116,7 +129,7 @@ export default function Settings() {
       age: Number(age),
       gender,
       activity,
-      goal
+      goal,
     });
 
     const ref = doc(db, "users", user.uid);
@@ -136,48 +149,76 @@ export default function Settings() {
         calorieGoal: calories,
         stepGoal: Number(stepGoal),
         premium: isPremium,
-      }
+      },
     });
 
     alert("Zapisano");
   };
 
   return (
-  <LinearGradient colors={theme.gradient} style={{flex:1}}>
-    <SafeAreaView style={{flex:1}}>
-      <View style={styles.header}>
-        <Pressable onPress={()=>router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={theme.primary}/>
-        </Pressable>
-        <Text style={[styles.title,{color:theme.primary}]}>Ustawienia</Text>
-        <View style={{width:36}}/>
-      </View>
-      <ScrollView
-        contentContainerStyle={{padding:20, paddingBottom:300}}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
-
-          <Text style={[styles.title,{color:theme.primary}]}>
+    <LinearGradient colors={theme.gradient} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={22} color={theme.primary} />
+          </Pressable>
+          <Text style={[styles.title, { color: theme.primary }]}>
+            Ustawienia
+          </Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 300 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <Text style={[styles.title, { color: theme.primary }]}>
             Ustawienia
           </Text>
 
           <Text style={styles.label}>Waga (kg)</Text>
-          <TextInput value={weight} onChangeText={setWeight} style={styles.input} keyboardType="numeric"/>
+          <TextInput
+            value={weight}
+            onChangeText={setWeight}
+            style={styles.input}
+            keyboardType="numeric"
+          />
 
           <Text style={styles.label}>Wzrost (cm)</Text>
-          <TextInput value={height} onChangeText={setHeight} style={styles.input} keyboardType="numeric"/>
+          <TextInput
+            value={height}
+            onChangeText={setHeight}
+            style={styles.input}
+            keyboardType="numeric"
+          />
 
           <Text style={styles.label}>Wiek</Text>
-          <TextInput value={age} onChangeText={setAge} style={styles.input} keyboardType="numeric"/>
+          <TextInput
+            value={age}
+            onChangeText={setAge}
+            style={styles.input}
+            keyboardType="numeric"
+          />
 
           {/* PŁEĆ */}
           <Text style={styles.label}>Płeć</Text>
           <View style={styles.row}>
-            <Pressable style={[styles.btn, gender==="male" && {backgroundColor:theme.primary}]} onPress={()=>setGender("male")}>
+            <Pressable
+              style={[
+                styles.btn,
+                gender === "male" && { backgroundColor: theme.primary },
+              ]}
+              onPress={() => setGender("male")}
+            >
               <Text style={styles.text}>Mężczyzna</Text>
             </Pressable>
-            <Pressable style={[styles.btn, gender==="female" && {backgroundColor:theme.primary}]} onPress={()=>setGender("female")}>
+            <Pressable
+              style={[
+                styles.btn,
+                gender === "female" && { backgroundColor: theme.primary },
+              ]}
+              onPress={() => setGender("female")}
+            >
               <Text style={styles.text}>Kobieta</Text>
             </Pressable>
           </View>
@@ -185,11 +226,14 @@ export default function Settings() {
           {/* AKTYWNOŚĆ */}
           <Text style={styles.label}>Aktywność</Text>
           <View style={styles.row}>
-            {Object.keys(activityLevels).map(a=>(
+            {Object.keys(activityLevels).map((a) => (
               <Pressable
                 key={a}
-                style={[styles.btn, activity===a && {backgroundColor:theme.primary}]}
-                onPress={()=>setActivity(a)}
+                style={[
+                  styles.btn,
+                  activity === a && { backgroundColor: theme.primary },
+                ]}
+                onPress={() => setActivity(a)}
               >
                 <Text style={styles.text}>{a}</Text>
               </Pressable>
@@ -199,11 +243,23 @@ export default function Settings() {
           {/* CEL */}
           <Text style={styles.label}>Cel</Text>
           <View style={styles.row}>
-            <Pressable style={[styles.btn, goal==="masa" && {backgroundColor:theme.primary}]} onPress={()=>setGoal("masa")}>
+            <Pressable
+              style={[
+                styles.btn,
+                goal === "masa" && { backgroundColor: theme.primary },
+              ]}
+              onPress={() => setGoal("masa")}
+            >
               <Text style={styles.text}>Masa</Text>
             </Pressable>
 
-            <Pressable style={[styles.btn, goal==="redukcja" && {backgroundColor:theme.primary}]} onPress={()=>setGoal("redukcja")}>
+            <Pressable
+              style={[
+                styles.btn,
+                goal === "redukcja" && { backgroundColor: theme.primary },
+              ]}
+              onPress={() => setGoal("redukcja")}
+            >
               <Text style={styles.text}>Redukcja</Text>
             </Pressable>
           </View>
@@ -211,15 +267,20 @@ export default function Settings() {
           {/* MOTYW */}
           <Text style={styles.label}>Motyw</Text>
           <View style={styles.row}>
-            {Object.keys(themes).filter(t => t !== "zloty" || isPremium).map(t=>(
-              <Pressable
-                key={t}
-                style={[styles.themeBtn, themeName===t && {backgroundColor:themes[t].primary}]}
-                onPress={()=>setThemeName(t)}
-              >
-                <Text style={styles.text}>{t}</Text>
-              </Pressable>
-            ))}
+            {Object.keys(themes)
+              .filter((t) => t !== "zloty" || isPremium)
+              .map((t) => (
+                <Pressable
+                  key={t}
+                  style={[
+                    styles.themeBtn,
+                    themeName === t && { backgroundColor: themes[t].primary },
+                  ]}
+                  onPress={() => setThemeName(t)}
+                >
+                  <Text style={styles.text}>{t}</Text>
+                </Pressable>
+              ))}
           </View>
 
           <Text style={styles.label}>Cel kroków</Text>
@@ -232,25 +293,71 @@ export default function Settings() {
             placeholderTextColor="#444"
           />
 
-          <Pressable style={[styles.save,{backgroundColor:theme.primary}]} onPress={save}>
-            <Text style={{color:"white"}}>Zapisz</Text>
+          <Pressable
+            style={[styles.save, { backgroundColor: theme.primary }]}
+            onPress={save}
+          >
+            <Text style={{ color: "white" }}>Zapisz</Text>
           </Pressable>
-
-         </ScrollView>
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingHorizontal:20,paddingTop:16,paddingBottom:8},
-  backBtn:{width:36,height:36,borderRadius:18,backgroundColor:"#ffffff08",justifyContent:"center",alignItems:"center"},
-  title:{fontSize:20,fontFamily:"Inter_700Bold"},
-  label:{color:"#555",fontFamily:"Inter_700Bold",fontSize:11,letterSpacing:2,marginBottom:8,marginTop:18},
-  input:{backgroundColor:"#111318",padding:14,borderRadius:14,marginBottom:4,color:"white",borderWidth:1,borderColor:"#1a1a1a",fontFamily:"Inter_400Regular"},
-  row:{flexDirection:"row",gap:8,flexWrap:"wrap",marginBottom:4},
-  btn:{paddingHorizontal:16,paddingVertical:10,borderRadius:12,backgroundColor:"#111318",borderWidth:1,borderColor:"#1a1a1a"},
-  themeBtn:{paddingHorizontal:16,paddingVertical:10,borderRadius:12,backgroundColor:"#111318",borderWidth:1,borderColor:"#1a1a1a"},
-  text:{color:"#888",fontFamily:"Inter_700Bold",fontSize:12},
-  save:{padding:15,borderRadius:14,alignItems:"center",marginTop:24},
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ffffff08",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  label: {
+    color: "#555",
+    fontFamily: "Inter_700Bold",
+    fontSize: 11,
+    letterSpacing: 2,
+    marginBottom: 8,
+    marginTop: 18,
+  },
+  input: {
+    backgroundColor: "#111318",
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 4,
+    color: "white",
+    borderWidth: 1,
+    borderColor: "#1a1a1a",
+    fontFamily: "Inter_400Regular",
+  },
+  row: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 4 },
+  btn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#111318",
+    borderWidth: 1,
+    borderColor: "#1a1a1a",
+  },
+  themeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#111318",
+    borderWidth: 1,
+    borderColor: "#1a1a1a",
+  },
+  text: { color: "#888", fontFamily: "Inter_700Bold", fontSize: 12 },
+  save: { padding: 15, borderRadius: 14, alignItems: "center", marginTop: 24 },
 });
